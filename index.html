@@ -1,0 +1,835 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#12131a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>四级单词</title>
+<style>
+  :root{
+    --bg1:#1a1d2b; --bg2:#12131a; --cover:0;
+    --card:#1b1d29; --card2:#20232f;
+    --fg:#eceef6; --dim:#8b93ab; --line:#2a2e3d;
+    --ok:#3ecf8e; --no:#e2725b; --accent:#5b8cff;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html{height:100%;background:radial-gradient(120% 80% at 50% 0%,var(--bg1) 0%,var(--bg2) 60%)}
+  body{
+    margin:0; height:100%; background:transparent; color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    display:flex; flex-direction:column;
+    padding:calc(env(safe-area-inset-top) + 12px) 16px calc(env(safe-area-inset-bottom) + 14px);
+    user-select:none; position:relative;
+  }
+
+  /* ---------- 背景层 ---------- */
+  #bgimg{position:fixed;inset:0;background-size:cover;background-position:center;
+    opacity:0;transition:opacity .35s;z-index:0}
+  #bgimg.show{opacity:1}
+  #veil{position:fixed;inset:0;background:rgba(7,8,12,var(--cover));
+    opacity:0;transition:opacity .35s;z-index:1;pointer-events:none}
+  #veil.show{opacity:1}
+
+  /* ---------- 顶栏 ---------- */
+  header{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--dim);z-index:2}
+  #barwrap{flex:1;height:6px;background:var(--line);border-radius:99px;overflow:hidden}
+  #bar{height:100%;width:0;background:linear-gradient(90deg,#4b7bff,#3ecf8e);transition:width .3s}
+  #stat{white-space:nowrap;font-variant-numeric:tabular-nums}
+  header button{background:none;border:1px solid var(--line);color:var(--dim);
+    width:34px;height:34px;border-radius:10px;font-size:15px;cursor:pointer;line-height:1}
+  header button:hover{color:var(--fg);border-color:#3a3f52}
+
+  /* ---------- 分册条 ---------- */
+  #vols{display:flex;gap:8px;overflow-x:auto;margin:12px -16px 0;padding:2px 16px 8px;
+    scrollbar-width:none;z-index:2}
+  #vols::-webkit-scrollbar{display:none}
+  .chip{flex:0 0 auto;min-width:42px;height:34px;border-radius:10px;
+    border:1px solid var(--line);background:rgba(24,26,36,.75);color:var(--dim);
+    font-size:13px;cursor:pointer;position:relative;transition:.15s}
+  .chip:hover{color:var(--fg)}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+  .chip.done::after{content:"✓";position:absolute;top:-5px;right:-3px;font-size:10px;
+    color:var(--ok);text-shadow:0 0 4px #000}
+  .chip.on.done::after{color:#d9ffe9}
+
+  /* ---------- 卡片 ---------- */
+  main{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;z-index:2;padding:10px 0}
+  .card{
+    width:100%;max-width:460px;min-height:250px;max-height:100%;overflow-y:auto;
+    background:linear-gradient(180deg,rgba(32,35,47,.94),rgba(27,29,41,.94));
+    border:1px solid var(--line);border-radius:22px;padding:32px 24px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;cursor:pointer;transition:transform .08s,box-shadow .2s;
+    box-shadow:0 18px 50px -24px #000;backdrop-filter:blur(6px);
+  }
+  .card:active{transform:scale(.985)}
+  .card.done{cursor:default}
+  #word{font-size:clamp(30px,9vw,42px);font-weight:700;letter-spacing:.4px;word-break:break-word}
+  .phon{margin-top:10px;color:var(--dim);font-size:15px;display:flex;align-items:center;gap:8px}
+  #say{border:0;background:none;font-size:17px;cursor:pointer;opacity:.75;padding:2px}
+  #say:hover{opacity:1}
+  #trans{margin-top:20px;font-size:17px;line-height:1.75;color:#cfd6ea;
+    opacity:0;transform:translateY(6px);transition:opacity .18s,transform .18s;min-height:1.75em}
+  #trans.show{opacity:1;transform:none}
+  #hint{margin-top:22px;font-size:12px;color:#5a6178}
+
+  /* ---------- 级别标记 ---------- */
+  #badge{font-size:10.5px;padding:2px 7px;border-radius:6px;margin-left:2px;
+    border:1px solid var(--line);color:var(--dim);white-space:nowrap}
+  #badge.lv1{color:#8fb6ff;border-color:#2f4370;background:#1a2338}
+  #badge.lv2{color:#c9ba90;border-color:#4a4230;background:#241f16}
+  #badge.lv3{color:#9aa4bd;border-color:#333a4b;background:#1c1f2a}
+
+  /* ---------- 例句 ---------- */
+  #ex{display:none;width:100%;margin-top:16px;padding-top:14px;
+    border-top:1px solid var(--line);text-align:left}
+  #ex.show{display:block}
+  #exen{font-size:14.5px;line-height:1.65;color:#c6cde1;font-style:italic}
+  #exzh{margin-top:7px;font-size:13px;line-height:1.55;color:#7d87a2}
+
+  /* ---------- 派生词 ---------- */
+  #fam{display:none;width:100%;margin-top:12px;text-align:left;
+    font-size:13px;line-height:1.75;color:#8b93ab}
+  #fam.show{display:block}
+  #fam .flabel{color:#5a6178;margin-right:6px;font-size:12px}
+  #fam .f{display:inline-block;margin:1px 10px 1px 0}
+  #fam .f b{color:#a9c4ff;font-weight:600}
+  #fam .f i{font-style:normal;color:#67708a;margin-left:4px;font-size:12px}
+  #fam .f.out b{color:#6b7386;font-weight:500}
+
+  /* ---------- 词形变化 ---------- */
+  #forms{display:none;width:100%;margin-top:10px;text-align:left;
+    font-size:12px;color:#67708a;line-height:1.6}
+  #forms.show{display:block}
+  #forms span{color:#8b93ab}
+
+  /* ---------- 底部 ---------- */
+  footer{display:flex;flex-direction:column;gap:10px;max-width:460px;width:100%;
+    margin:0 auto;z-index:2}
+  .row{display:flex;gap:12px}
+  .row.hide{display:none}
+  button.big{flex:1;padding:16px 0;border:1px solid transparent;border-radius:14px;
+    font-size:16px;font-weight:600;cursor:pointer;transition:filter .15s}
+  button.big:active{filter:brightness(.92)}
+  #no{background:#33232a;color:#f0a898;border-color:#4a2f38}
+  #yes{background:#1c3b30;color:#8fe6bb;border-color:#265243}
+  #nextvol{background:#1d2c4d;color:#a9c4ff;border-color:#2b4270}
+  #revol{background:#242833;color:#9aa4bd;border-color:#333a4b;flex:0 0 38%}
+  .tip{text-align:center;font-size:11.5px;color:#4d5468;line-height:1.6}
+
+  /* ---------- 设置面板 ---------- */
+  #scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);opacity:0;pointer-events:none;
+    transition:opacity .2s;z-index:40}
+  #scrim.show{opacity:1;pointer-events:auto}
+  #sheet{position:fixed;left:0;right:0;bottom:0;z-index:50;background:#171a24;
+    border-top:1px solid var(--line);border-radius:20px 20px 0 0;
+    padding:18px 20px calc(env(safe-area-inset-bottom) + 20px);
+    transform:translateY(115%);transition:transform .26s ease;max-height:82vh;overflow:auto}
+  #sheet.show{transform:translateY(0)}
+  #sheet h3{margin:16px 0 10px;font-size:12px;color:var(--dim);font-weight:600;
+    letter-spacing:.08em;text-transform:uppercase}
+  #sheet h3:first-child{margin-top:4px}
+  #swatches{display:flex;gap:10px;flex-wrap:wrap}
+  .sw{width:46px;height:46px;border-radius:12px;border:2px solid transparent;cursor:pointer;
+    padding:0;transition:.15s}
+  .sw.on{border-color:#fff;box-shadow:0 0 0 2px #171a24 inset}
+  .row2{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .row2 button{flex:1;min-width:130px;padding:12px;border-radius:12px;border:1px solid var(--line);
+    background:#1e2230;color:#cfd6ea;font-size:14px;cursor:pointer}
+  .row2 button:hover{border-color:#3a4256}
+  .ctl{display:flex;align-items:center;gap:12px;margin-top:16px;font-size:13px;color:var(--dim)}
+  .ctl input[type=range]{flex:1;accent-color:var(--accent)}
+  #coverv{width:42px;text-align:right;font-variant-numeric:tabular-nums}
+  #reset{width:100%;margin-top:8px;padding:13px;border-radius:12px;border:1px solid #4a2f38;
+    background:#2a1d22;color:#e0a09a;font-size:14px;cursor:pointer}
+  #reset:hover{background:#33232a}
+  #close{width:100%;margin-top:16px;padding:13px;border-radius:12px;border:0;
+    background:#232838;color:#cfd6ea;font-size:14px;cursor:pointer}
+  .note{font-size:11.5px;color:#4d5468;margin:12px 0 0;line-height:1.6}
+  .err{display:none;font-size:11.5px;color:#e08b8b;margin-top:10px;line-height:1.6;
+    word-break:break-all;background:#2a1d22;border:1px solid #4a2f38;border-radius:10px;padding:8px 10px}
+  .err.show{display:block}
+
+  #toast{position:fixed;left:50%;bottom:96px;transform:translate(-50%,10px);
+    background:#2a2f40;color:#e8ecf8;padding:10px 18px;border-radius:10px;font-size:13px;
+    opacity:0;transition:.22s;z-index:60;pointer-events:none;white-space:nowrap}
+  #toast.show{opacity:1;transform:translate(-50%,0)}
+
+  @media (min-width:700px){
+    #sheet{left:50%;right:auto;width:480px;transform:translate(-50%,115%);
+      border-radius:20px;bottom:20px}
+    #sheet.show{transform:translate(-50%,0)}
+  }
+</style>
+</head>
+<body>
+
+<div id="bgimg"></div>
+<div id="veil"></div>
+
+<header>
+  <div id="barwrap"><div id="bar"></div></div>
+  <div id="stat">加载中…</div>
+  <button id="gear" title="设置">⚙</button>
+</header>
+
+<nav id="vols" aria-label="分册"></nav>
+
+<main>
+  <div class="card" id="card">
+    <div id="word">加载中…</div>
+    <div class="phon"><span id="phon"></span><button id="say" title="朗读">🔊</button>
+      <span id="badge"></span></div>
+    <div id="trans"></div>
+    <div id="ex"><div id="exen"></div><div id="exzh"></div></div>
+    <div id="fam"></div>
+    <div id="forms"></div>
+    <div id="hint">点击卡片显示释义</div>
+  </div>
+</main>
+
+<footer>
+  <div class="row" id="judge">
+    <button class="big" id="no">不认识</button>
+    <button class="big" id="yes">认识</button>
+  </div>
+  <div class="row hide" id="after">
+    <button class="big" id="revol">重背本册</button>
+    <button class="big" id="nextvol">下一册 →</button>
+  </div>
+  <div class="tip" id="tip"></div>
+</footer>
+
+<div id="scrim"></div>
+<aside id="sheet" aria-label="设置">
+  <h3>背景</h3>
+  <div id="swatches"></div>
+  <div class="row2">
+    <button id="pickimg">🖼 选一张本地图片</button>
+    <button id="clearimg">移除图片</button>
+  </div>
+  <label class="ctl">遮罩 <input type="range" id="cover" min="0" max="90" step="5">
+    <span id="coverv">0%</span></label>
+  <p class="note">遮罩是图片上方那层黑色，调高一点字更清楚（没选图片时不生效）。<br>
+    图片只压缩后存在你这台设备上，不会上传到任何地方。</p>
+  <div class="err" id="bgerr"></div>
+
+  <h3>学习</h3>
+  <button id="reset">清空所有进度</button>
+
+  <button id="close">收起</button>
+</aside>
+
+<input type="file" id="file" accept="image/*" hidden>
+<div id="toast"></div>
+
+<script src="words.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* ================= 常量 ================= */
+  var PER = 100;                       // 每册多少个词
+  var K_KNOWN = 'cet4.known';
+  var K_VOL   = 'cet4.vol';
+  var K_THEME = 'cet4.theme';
+  var K_COVER = 'cet4.cover';
+
+  var THEMES = [
+    { id: 'night',  name: '深夜', bg1: '#1a1d2b', bg2: '#12131a' },
+    { id: 'forest', name: '森林', bg1: '#17301f', bg2: '#0b1410' },
+    { id: 'wine',   name: '酒红', bg1: '#33161c', bg2: '#120a0c' },
+    { id: 'ocean',  name: '深海', bg1: '#0f2940', bg2: '#060f18' },
+    { id: 'black',  name: '纯黑', bg1: '#101012', bg2: '#000000' }
+  ];
+
+  var $ = function (id) { return document.getElementById(id); };
+  var store = {
+    get: function (k, dflt) {
+      try { var v = localStorage.getItem(k); return v === null ? dflt : JSON.parse(v); }
+      catch (e) { return dflt; }
+    },
+    set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  };
+
+  /* ================= 词表 ================= */
+  var WORDS = (typeof window.WORDS !== 'undefined' && Array.isArray(window.WORDS)) ? window.WORDS : null;
+  if (!WORDS || !WORDS.length) {
+    $('word').textContent = '词表没加载出来';
+    $('hint').textContent = '确认 words.js 和 index.html 在同一个文件夹里';
+    $('tip').textContent = '词表文件缺失：words.js 必须和本页面放在一起。';
+    return;
+  }
+  // 按词表原顺序排（rank 是 gen.py 写进去的）
+  WORDS = WORDS.slice().sort(function (a, b) { return (a.rank || 0) - (b.rank || 0); });
+
+  var TOTAL_VOLS = Math.ceil(WORDS.length / PER);
+
+  /* ================= 状态 ================= */
+  var known = store.get(K_KNOWN, {}) || {};
+  var vol = Math.min(Math.max(parseInt(store.get(K_VOL, 0), 10) || 0, 0), TOTAL_VOLS - 1);
+  var theme = store.get(K_THEME, 'night');
+  var cover = store.get(K_COVER, 55);
+
+  var queue = [];          // 当前册里还没背完的词（数组顺序 = 出题顺序）
+  var chips = [];          // 分册按钮
+  var cur = null;          // 当前词
+  var curPos = -1;         // 当前词在 queue 里的位置
+  var revealed = false;
+  var bgUrl = null;        // 自定义背景的 objectURL
+
+  /* ================= 分册 ================= */
+  function buildChips() {
+    var rail = $('vols');
+    rail.textContent = '';
+    chips = [];
+    for (var i = 0; i < TOTAL_VOLS; i++) {
+      (function (i) {
+        var b = document.createElement('button');
+        b.className = 'chip';
+        b.textContent = String(i + 1);
+        b.setAttribute('aria-label', '第 ' + (i + 1) + ' 册');
+        b.addEventListener('click', function () { goVolume(i); });
+        rail.appendChild(b);
+        chips.push(b);
+      })(i);
+    }
+  }
+
+  function volWords(v) {
+    return WORDS.slice(v * PER, (v + 1) * PER);
+  }
+
+  function knownInVol(v) {
+    var ws = volWords(v), n = 0;
+    for (var i = 0; i < ws.length; i++) { if (known[ws[i].word]) n++; }
+    return n;
+  }
+
+  function updateChips() {
+    for (var i = 0; i < chips.length; i++) {
+      var c = chips[i];
+      var ws = volWords(i);
+      c.className = 'chip' + (i === vol ? ' on' : '') +
+        (ws.length && knownInVol(i) === ws.length ? ' done' : '');
+    }
+    var active = chips[vol];
+    if (active && active.scrollIntoView) {
+      try { active.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' }); } catch (e) {}
+    }
+  }
+
+  function goVolume(i) {
+    vol = i;
+    store.set(K_VOL, vol);
+    loadVolume(true);
+  }
+
+  function loadVolume(andNext) {
+    queue = volWords(vol);
+    cur = null;
+    if (andNext) next();
+  }
+
+  /* ================= 出题 ================= */
+  function totalKnown() {
+    var n = 0;
+    for (var k in known) { if (known[k]) n++; }
+    return n;
+  }
+
+  function updateStat() {
+    var ws = volWords(vol), done = knownInVol(vol);
+    $('bar').style.width = (ws.length ? done / ws.length * 100 : 0) + '%';
+    $('stat').textContent = '第 ' + (vol + 1) + ' 册 · ' + done + '/' + ws.length;
+    $('tip').textContent = '总进度 ' + totalKnown() + ' / ' + WORDS.length +
+      ' · 空格显示释义 · ← 不认识 · → 认识';
+  }
+
+  var REVEAL_PARTS = ['trans', 'ex', 'fam', 'forms'];
+
+  function reveal() {
+    if (!cur || revealed) return;
+    revealed = true;
+    var w = cur;
+    if (w.trans) $('trans').classList.add('show');
+    if (w.ex) $('ex').classList.add('show');
+    if (w.fam && w.fam.length) $('fam').classList.add('show');
+    if (w.forms && w.forms.length) $('forms').classList.add('show');
+    $('hint').textContent = '认识就点「认识」，不认识点「不认识」';
+  }
+
+  function hideParts() {
+    for (var i = 0; i < REVEAL_PARTS.length; i++) {
+      $(REVEAL_PARTS[i]).classList.remove('show');
+    }
+  }
+
+  function renderBadge(w) {
+    var b = $('badge');
+    var lv = w.lv || 1;
+    if (lv === 1) { b.textContent = '四级新增'; b.className = 'lv1'; }
+    else if (lv === 2) { b.textContent = '高考复习'; b.className = 'lv2'; }
+    else if (lv === 3) { b.textContent = '基础'; b.className = 'lv3'; }
+    else { b.textContent = ''; b.className = ''; }
+  }
+
+  function renderFam(w) {
+    var box = $('fam');
+    box.textContent = '';
+    var fam = w.fam || [];
+    if (!fam.length) return;
+    var label = document.createElement('span');
+    label.className = 'flabel';
+    label.textContent = '派生';
+    box.appendChild(label);
+    for (var i = 0; i < fam.length; i++) {
+      var it = fam[i];
+      var s = document.createElement('span');
+      s.className = 'f' + (it.s ? '' : ' out');
+      var b = document.createElement('b');
+      b.textContent = it.w;
+      s.appendChild(b);
+      if (it.t) {
+        var t = document.createElement('i');
+        t.textContent = it.t;
+        s.appendChild(t);
+      }
+      box.appendChild(s);
+    }
+  }
+
+  function renderForms(w) {
+    var box = $('forms');
+    box.textContent = '';
+    var f = w.forms || [];
+    if (!f.length) return;
+    var label = document.createElement('span');
+    label.textContent = '变形：';
+    box.appendChild(label);
+    box.appendChild(document.createTextNode(f.join(' / ')));
+  }
+
+  function showWord(w, pos) {
+    cur = w; curPos = pos; revealed = false;
+    $('card').classList.remove('done');
+    $('judge').classList.remove('hide');
+    $('after').classList.add('hide');
+    $('word').textContent = w.word;
+    $('phon').textContent = w.phonetic || '';
+    $('trans').textContent = w.trans || '';
+    renderBadge(w);
+    if (w.ex) {
+      $('exen').textContent = '“' + w.ex.en + '”';
+      $('exzh').textContent = w.ex.zh || '';
+    } else {
+      $('exen').textContent = '';
+      $('exzh').textContent = '';
+    }
+    renderFam(w);
+    renderForms(w);
+    hideParts();
+    $('hint').textContent = '点击卡片显示释义';
+    updateStat();
+    updateChips();
+  }
+
+  function showVolumeDone() {
+    cur = null; curPos = -1;
+    var last = vol >= TOTAL_VOLS - 1;
+    $('card').classList.add('done');
+    $('word').textContent = last ? '🎉 全部背完' : '🎉 第 ' + (vol + 1) + ' 册完成';
+    $('phon').textContent = '';
+    $('badge').textContent = '';
+    $('badge').className = '';
+    hideParts();
+    $('trans').textContent = '';
+    $('exen').textContent = '';
+    $('exzh').textContent = '';
+    $('fam').textContent = '';
+    $('forms').textContent = '';
+    $('hint').textContent = last
+      ? '共 ' + WORDS.length + ' 个词，了不起'
+      : '建议明天再背下一册，记牢一点';
+    $('judge').classList.add('hide');
+    $('after').classList.remove('hide');
+    $('nextvol').style.display = last ? 'none' : '';
+    updateStat();
+    updateChips();
+  }
+
+  function next() {
+    for (var p = 0; p < queue.length; p++) {
+      if (!known[queue[p].word]) { showWord(queue[p], p); return; }
+    }
+    showVolumeDone();
+  }
+
+  function mark(isKnown) {
+    if (!cur) return;
+    if (!revealed) { reveal(); return; }      // 没看释义就点按钮 → 先给看
+    var w = cur;
+    if (isKnown) {
+      known[w.word] = 1;
+    } else {
+      delete known[w.word];
+      // 不认识的挪到本册队尾，过一会儿再考
+      if (curPos >= 0) {
+        var item = queue.splice(curPos, 1)[0];
+        queue.push(item);
+      }
+    }
+    store.set(K_KNOWN, known);
+    next();
+  }
+
+  /* ================= 背景 ================= */
+  function applyTheme() {
+    var t = null;
+    for (var i = 0; i < THEMES.length; i++) { if (THEMES[i].id === theme) t = THEMES[i]; }
+    if (!t) t = THEMES[0];
+    var root = document.documentElement;
+    root.style.setProperty('--bg1', t.bg1);
+    root.style.setProperty('--bg2', t.bg2);
+    var meta = document.querySelector('meta[name=theme-color]');
+    if (meta) meta.setAttribute('content', t.bg2);
+    var sws = $('swatches').children;
+    for (var k = 0; k < sws.length; k++) {
+      sws[k].className = 'sw' + (sws[k].getAttribute('data-id') === t.id ? ' on' : '');
+    }
+  }
+
+  function buildSwatches() {
+    var box = $('swatches');
+    box.textContent = '';
+    THEMES.forEach(function (t) {
+      var b = document.createElement('button');
+      b.className = 'sw';
+      b.setAttribute('data-id', t.id);
+      b.setAttribute('title', t.name);
+      b.style.background = 'linear-gradient(160deg,' + t.bg1 + ',' + t.bg2 + ')';
+      b.addEventListener('click', function () {
+        theme = t.id;
+        store.set(K_THEME, theme);
+        applyTheme();
+      });
+      box.appendChild(b);
+    });
+  }
+
+  function applyCover() {
+    document.documentElement.style.setProperty('--cover', (cover / 100).toFixed(2));
+    $('cover').value = String(cover);
+    $('coverv').textContent = cover + '%';
+  }
+
+  function showBg(url) {
+    $('bgimg').style.backgroundImage = 'url("' + url + '")';
+    $('bgimg').classList.add('show');
+    $('veil').classList.add('show');
+  }
+
+  function hideBg() {
+    $('bgimg').style.backgroundImage = '';
+    $('bgimg').classList.remove('show');
+    $('veil').classList.remove('show');
+  }
+
+  /* --- IndexedDB：图片存这里，localStorage 只有 5MB 装不下 --- */
+  function db() {
+    return new Promise(function (resolve, reject) {
+      if (typeof indexedDB === 'undefined') { reject(new Error('no indexedDB')); return; }
+      var req = indexedDB.open('cet4db', 1);
+      req.onupgradeneeded = function () {
+        if (!req.result.objectStoreNames.contains('kv')) req.result.createObjectStore('kv');
+      };
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { reject(req.error); };
+    });
+  }
+
+  function dbSet(key, val) {
+    return db().then(function (d) {
+      return new Promise(function (resolve, reject) {
+        var tx = d.transaction('kv', 'readwrite');
+        tx.objectStore('kv').put(val, key);
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function () { reject(tx.error); };
+      });
+    });
+  }
+
+  function dbGet(key) {
+    return db().then(function (d) {
+      return new Promise(function (resolve, reject) {
+        var tx = d.transaction('kv', 'readonly');
+        var q = tx.objectStore('kv').get(key);
+        q.onsuccess = function () { resolve(q.result || null); };
+        q.onerror = function () { reject(q.error); };
+      });
+    });
+  }
+
+  function dbDel(key) {
+    return db().then(function (d) {
+      return new Promise(function (resolve, reject) {
+        var tx = d.transaction('kv', 'readwrite');
+        tx.objectStore('kv').delete(key);
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function () { reject(tx.error); };
+      });
+    });
+  }
+
+  /* --- 存背景图的两条路 ---
+     IndexedDB 能存原图 Blob（容量大），但 Chrome/Edge 在 file://（双击打开）下
+     会禁用 IndexedDB，存不进去。这时退回 localStorage 存 base64：
+     压缩后一般 200-400KB，base64 膨胀 1.33 倍也才 500KB 左右，5MB 装得下。 */
+  var K_BG_LOCAL = 'cet4.bg';
+
+  function blobToDataURL(blob) {
+    return new Promise(function (resolve, reject) {
+      var r = new FileReader();
+      r.onload = function () { resolve(r.result); };
+      r.onerror = function () { reject(r.error || new Error('read failed')); };
+      r.readAsDataURL(blob);
+    });
+  }
+
+  // 返回一个可以直接放进 CSS 的地址（参数可以是 Blob，也可以是 dataURL 字符串）
+  function saveBg(data) {
+    if (typeof data === 'string') {              // 已经是 dataURL
+      if (data.length > 4000000) throw new Error('TOO_BIG');
+      try { localStorage.setItem(K_BG_LOCAL, data); }
+      catch (e) { throw new Error('TOO_BIG'); }
+      return Promise.resolve(data);
+    }
+    return dbSet('bg', data).then(
+      function () {
+        try { localStorage.removeItem(K_BG_LOCAL); } catch (e) {}
+        return URL.createObjectURL(data);
+      },
+      function () {                       // IndexedDB 用不了 → 退回 localStorage
+        return blobToDataURL(data).then(function (url) {
+          if (url.length > 4000000) throw new Error('TOO_BIG');
+          localStorage.setItem(K_BG_LOCAL, url);
+          return url;
+        });
+      }
+    );
+  }
+
+  function loadBgURL() {
+    return dbGet('bg').then(function (blob) {
+      if (blob) return URL.createObjectURL(blob);
+      try { return localStorage.getItem(K_BG_LOCAL) || null; } catch (e) { return null; }
+    }).catch(function () {
+      try { return localStorage.getItem(K_BG_LOCAL) || null; } catch (e) { return null; }
+    });
+  }
+
+  function clearBg() {
+    try { localStorage.removeItem(K_BG_LOCAL); } catch (e) {}
+    dbDel('bg').catch(function () {});
+  }
+
+  /* 图片压缩：手机照片 5MB 直接存会爆，压到 1400px / JPEG 82% 一般 200-400KB
+     失败时把"卡在哪一步"写清楚，方便排查 */
+  function compressImage(file, maxSide, quality) {
+    return new Promise(function (resolve, reject) {
+      var url;
+      try { url = URL.createObjectURL(file); }
+      catch (e) { reject(new Error('浏览器不给这个文件建临时地址')); return; }
+
+      var img = new Image();
+      var done = false;
+      var timer = setTimeout(function () {
+        finish(new Error('解码超时（图片太大或已损坏）'));
+      }, 15000);
+
+      function finish(err, val) {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        try { URL.revokeObjectURL(url); } catch (e) {}
+        err ? reject(err) : resolve(val);
+      }
+
+      img.onload = function () {
+        try {
+          var nw = img.naturalWidth || img.width;
+          var nh = img.naturalHeight || img.height;
+          if (!nw || !nh) throw new Error('图片尺寸是 0（文件可能是空的）');
+
+          var scale = Math.min(1, maxSide / Math.max(nw, nh));
+          var w = Math.max(1, Math.round(nw * scale));
+          var h = Math.max(1, Math.round(nh * scale));
+
+          var c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          var ctx = c.getContext && c.getContext('2d');
+          if (!ctx) throw new Error('创建画布失败（可能是内存不够）');
+          ctx.drawImage(img, 0, 0, w, h);
+
+          if (c.toBlob) {
+            c.toBlob(function (blob) {
+              if (blob) { finish(null, blob); return; }
+              try { finish(null, c.toDataURL('image/jpeg', quality)); }
+              catch (e2) { finish(new Error('画布导出失败（图片可能太大）')); }
+            }, 'image/jpeg', quality);
+          } else {
+            finish(null, c.toDataURL('image/jpeg', quality));
+          }
+        } catch (e) { finish(e); }
+      };
+
+      img.onerror = function () {
+        finish(new Error('图片解码失败（文件损坏、是云端占位文件，或浏览器不认这个格式）'));
+      };
+
+      img.src = url;
+    });
+  }
+
+  var toastTimer = null;
+  function toast(msg) {
+    var t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2200);
+  }
+
+  // 设置面板里的红色诊断行：真的失败时，把卡在哪一步 + 文件信息写出来
+  function setBgErr(msg) {
+    var el = $('bgerr');
+    if (!el) return;
+    el.textContent = msg || '';
+    if (msg) el.classList.add('show'); else el.classList.remove('show');
+  }
+
+  /* ================= 事件 ================= */
+  $('card').addEventListener('click', reveal);
+  $('say').addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (!cur || !('speechSynthesis' in window)) return;
+    try {
+      var u = new SpeechSynthesisUtterance(cur.word);
+      u.lang = 'en-US'; u.rate = 0.9;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+    } catch (err) {}
+  });
+  $('no').addEventListener('click', function () { mark(false); });
+  $('yes').addEventListener('click', function () { mark(true); });
+  $('nextvol').addEventListener('click', function () {
+    if (vol < TOTAL_VOLS - 1) goVolume(vol + 1);
+  });
+  $('revol').addEventListener('click', function () {
+    var ws = volWords(vol);
+    if (!window.confirm('清空第 ' + (vol + 1) + ' 册的 ' + ws.length + ' 个词，重新背一遍？')) return;
+    for (var i = 0; i < ws.length; i++) delete known[ws[i].word];
+    store.set(K_KNOWN, known);
+    loadVolume(true);
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); reveal(); }
+    else if (e.key === 'ArrowLeft') mark(false);
+    else if (e.key === 'ArrowRight') mark(true);
+  });
+
+  /* 设置面板 */
+  function openSheet() { $('sheet').classList.add('show'); $('scrim').classList.add('show'); }
+  function closeSheet() { $('sheet').classList.remove('show'); $('scrim').classList.remove('show'); }
+  $('gear').addEventListener('click', openSheet);
+  $('scrim').addEventListener('click', closeSheet);
+  $('close').addEventListener('click', closeSheet);
+
+  $('pickimg').addEventListener('click', function () { $('file').click(); });
+  $('clearimg').addEventListener('click', function () {
+    if (bgUrl && bgUrl.indexOf('blob:') === 0) URL.revokeObjectURL(bgUrl);
+    bgUrl = null;
+    hideBg();
+    clearBg();
+    setBgErr('');
+    toast('背景已移除');
+  });
+  $('file').addEventListener('change', function (e) {
+    var f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+
+    var fileInfo = '文件：' + f.name + ' · ' + Math.max(1, Math.round(f.size / 1024)) +
+      ' KB · ' + (f.type || '未知类型');
+
+    // iPhone 默认存 HEIC，除了 Safari 没几个浏览器能解
+    if (/\.hei[cf]$/i.test(f.name) || /hei[cf]/i.test(f.type || '')) {
+      setBgErr('HEIC 格式浏览器不解码。' + fileInfo);
+      toast('HEIC 是苹果专用格式，请先转成 JPG 再选');
+      return;
+    }
+
+    toast('处理中…');
+    setBgErr('');
+    compressImage(f, 1400, 0.82)
+      .catch(function (firstErr) {          // 超长截图之类，再压小一点重试
+        return compressImage(f, 900, 0.7).catch(function () { throw firstErr; });
+      })
+      .then(saveBg)
+      .then(function (url) {
+        if (bgUrl && bgUrl.indexOf('blob:') === 0) URL.revokeObjectURL(bgUrl);
+        bgUrl = url;
+        showBg(url);
+        setBgErr('');
+        toast('背景已更新');
+      })
+      .catch(function (err) {
+        var msg = (err && err.message) ? err.message : String(err);
+        if (msg === 'TOO_BIG') {
+          setBgErr('压缩后还是太大，存不下。' + fileInfo);
+          toast('这张图太大存不下，换一张小点的');
+        } else {
+          setBgErr(msg + ' ｜ ' + fileInfo);
+          toast('这张图读不出来，详情见设置面板');
+        }
+      });
+  });
+
+  $('cover').addEventListener('input', function (e) {
+    cover = parseInt(e.target.value, 10) || 0;
+    store.set(K_COVER, cover);
+    applyCover();
+  });
+
+  $('reset').addEventListener('click', function () {
+    if (!window.confirm('清空所有分册的学习进度？这个不能撤销。')) return;
+    known = {};
+    store.set(K_KNOWN, known);
+    store.set(K_VOL, 0);
+    vol = 0;
+    loadVolume(true);
+    closeSheet();
+    toast('已重置');
+  });
+
+  /* ================= 启动 ================= */
+  buildChips();
+  buildSwatches();
+  applyTheme();
+  applyCover();
+  updateChips();
+  loadVolume(true);
+
+  // 恢复自定义背景（异步，不挡首屏）
+  loadBgURL().then(function (url) {
+    if (!url) return;
+    bgUrl = url;
+    showBg(url);
+  }).catch(function () {});
+})();
+</script>
+</body>
+</html>
